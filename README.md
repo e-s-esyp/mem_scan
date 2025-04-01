@@ -1,0 +1,1 @@
+Scanning memory of any process in rooted android.
