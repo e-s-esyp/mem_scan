@@ -8,8 +8,9 @@ LIB_PATH=$SYSROOT/usr/lib/arm-linux-androideabi/29  # Используем на�
 $CLANG --target=armv7a-linux-androideabi \
     --sysroot=$SYSROOT \
     -L$LIB_PATH \
-    -o b main32.c -fPIE -pie -Wl,-dynamic-linker,/system/bin/linker \
-    -v
+    -o b main32.c -fPIE -pie -Wl,-dynamic-linker,/system/bin/linker 
+#    -v
 #    $LIB_PATH/crtbegin_dynamic.o \
 #    $LIB_PATH/crtend_android.o \
 
+adb push b /data/local/tmp/memscan

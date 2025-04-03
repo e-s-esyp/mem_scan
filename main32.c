@@ -5,6 +5,7 @@
 #include <malloc.h>
 #include <sys/types.h>
 #include <string.h>
+#include <errno.h>
 
 char HEX[16] = {'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f' };
 
@@ -33,12 +34,13 @@ char* c2hexl(const char* in, int n) {
         *q++ = HEX[c&15];
         *q++ = ' ';
     }
+    *q = 0;
     return out;
 }
 
 typedef struct block {
-    u_int32_t start;
-    u_int32_t end;
+    off_t start;
+    off_t end;
     char* info;
 } Block;
 
@@ -77,41 +79,67 @@ Block* parse(char* m, int* size) {
     return blocks;
 }
 
+int pread_(int fd, char* m, uint32_t size, off_t addr) {
+    uint32_t tot_read = 0;
+    int n = 0;
+//    lseek(fd, addr, SEEK_SET);
+    do {
+//        int read_ = read(fd, m + tot_read, size - tot_read);
+        int read_ = pread64(fd, m + tot_read, size - tot_read, addr + tot_read);
+        ++n;
+        if (read_ < 0) {
+            char* e = strerror(errno);
+            printf("pread(fd = %d, m + tot_read = %08x, size - tot_read = %08x, addr + tot_read = %08x);",
+                   fd, (uint32_t)(m + tot_read), size - tot_read, (uint32_t)(addr + tot_read));
+            printf(" times: %d, error:  %d, errno: %d, read %d of %d ", n, read_, errno, tot_read, size);
+            printf("%s\n", e);
+            return -1;
+        }
+        tot_read += read_;
+    } while (tot_read < size);
+//    printf(" read %d of %d, times: %d\n", tot_read, size, n);
+    return 0;
+}
+
 void scan(Block* b ,char* c, int l, int fd) {
-    //printf("%x-%x %s\n", b->start, b->end, b->info);
+//    printf("%x-%x %s\n", (uint32_t)b->start, (uint32_t)b->end, b->info);
     int size = b->end - b->start;
     char* m = malloc(size + 1);
     char* m2 = m + size - l;
-    lseek(fd, b->start, SEEK_SET);
-    read(fd, m, size);
+    if (pread_(fd, m, size, b->start) == -1) {
+        return;
+    }
     char* i = m;
     while(i != m2) {
         if(*i == *c) {
             if(memcmp(i, c, l) == 0) {
-                printf("found: %8x  %s\n", (u_int32_t)(i - m), b->info);
+                uint32_t p = (uint32_t)(i - m);
+//                char* a = c2hexl(i, 8);
+                printf("found: %08x %8x  %s\n", 
+                       (uint32_t)(p + b->start), p, b->info-73);                             
+//                free(a);
             }
         }
         i++;
     }
-
     free(m);
 }
 
 void scanX(Block* b, uint32_t value, int fd) {
     int size = b->end - b->start;
     char* m = malloc(size);  // Буфер для чтения данных
-    lseek(fd, b->start, SEEK_SET);
-    read(fd, m, size);  // Чтение данных в буфер
-
+    if (pread_(fd, m, size, b->start) == -1) {
+        return;
+    }
     uint32_t* i = (uint32_t*) m;  // Интерпретируем данные как массив 32-битных значений
     uint32_t* m2 = (uint32_t*) (m + size);  // Указатель на конец буфера
     while (i < m2) {  // Перебор всех 32-битных значений
         if (*i == value) {  // Сравнение с искомым значением
-            printf("found: %8x  %s\n", (uint32_t)(i - (uint32_t*)m), b->info);  // Вывод результата
+            uint32_t p = (uint32_t)(i - (uint32_t*)m) * 4;
+            printf("found: %08x %8x %s\n", (uint32_t)(p + b->start), p, b->info);  // Вывод результата
         }
         i++;
     }
-
     free(m);  // Освобождение памяти
 }
 
