@@ -135,14 +135,35 @@ void scanX(Block *b, uint32_t value, int fd) {
     }
     char *i = m;
     while (i != m2) {
-        if (*(uint32_t *) i == value) {  // Сравнение с искомым значением
+        if (*(uint32_t *) i == value) {
             uint32_t p = (uint32_t)(i - m);
             printf("found: %08x %8x %s\n", (uint32_t)(p + b->start), p,
-                   b->info);  // Вывод результата
+                   b->info);
         }
         i++;
     }
-    free(m);  // Освобождение памяти
+    free(m);
+}
+
+void scanXL(Block *b, uint32_t value, uint32_t length, int fd) {
+    int size = b->end - b->start;
+    char *m = malloc(size + 1);
+    char *m2 = m + size - 4;
+    if (pread_(fd, m, size, b->start) == -1) {
+        return;
+    }
+    char *i = m;
+    while (i != m2) {
+        for (int j = 0; j < length; ++j) {
+            if (*(uint32_t *) i == value - j) {
+                uint32_t p = (uint32_t)(i - m);
+                printf("found: %08x %8x %08x %s\n", (uint32_t)(p + b->start), p, *(uint32_t *) i,
+                       b->info);
+            }
+        }
+        i++;
+    }
+    free(m);
 }
 
 void scanX4(Block *b, uint32_t value, int fd) {
@@ -240,9 +261,17 @@ int main(int argc, char **argv) {
         }
     }
     if (search_value) {
-        printf("Searching value: %08x (%u)\n", hex_value, hex_value);
-        for (int i = 0; i < size2; ++i) {
-            scanX(B + i, hex_value, fd);
+        if (hex_length > 0) {
+            printf("Searching value: %08x (%u) length: %x (%u)\n", hex_value, hex_value, hex_length,
+                   hex_length);
+            for (int i = 0; i < size2; ++i) {
+                scanXL(B + i, hex_value, hex_length, fd);
+            }
+        } else {
+            printf("Searching value: %08x (%u)\n", hex_value, hex_value);
+            for (int i = 0; i < size2; ++i) {
+                scanX(B + i, hex_value, fd);
+            }
         }
     }
     close(fd);
